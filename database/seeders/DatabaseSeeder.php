@@ -10,38 +10,32 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        Studio::query()->delete();
-        Equipment::query()->delete();
-
-        Studio::create([
-            'name' => 'Studio A: The Professional',
+        Studio::updateOrCreate(['name' => 'Studio A: The Professional'], [
             'subtitle' => 'Podcasting pro',
             'description' => 'Studio profesional untuk produksi podcast.',
             'capacity' => 4,
             'features' => 'Acoustic foam, Pro mic, multi-camera',
-            'image' => 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=900',
+            'image' => 'images/studio-aurora.svg',
             'color' => '#dbeafe',
             'price_per_hour' => 150000,
         ]);
 
-        Studio::create([
-            'name' => 'Studio B: The Cozy Corner',
+        Studio::updateOrCreate(['name' => 'Studio B: The Cozy Corner'], [
             'subtitle' => 'Casual & bright',
             'description' => 'Studio nyaman untuk podcast santai.',
             'capacity' => 6,
             'features' => 'Natural light, cozy seating',
-            'image' => 'https://images.unsplash.com/photo-1593078166038-6b5c7f9b2c6f?w=900',
+            'image' => 'images/studio-cozy.svg',
             'color' => '#dcfce7',
             'price_per_hour' => 125000,
         ]);
 
-        Studio::create([
-            'name' => 'Studio C: The Creator Space',
+        Studio::updateOrCreate(['name' => 'Studio C: The Creator Space'], [
             'subtitle' => 'Creative space',
             'description' => 'Ruang kreatif untuk produksi konten.',
             'capacity' => 8,
             'features' => 'Green screen, lighting, video setup',
-            'image' => 'https://images.unsplash.com/photo-1590609140263-2b7d4b2e8f4b?w=900',
+            'image' => 'images/studio-creator.svg',
             'color' => '#fef3c7',
             'price_per_hour' => 175000,
         ]);
@@ -54,8 +48,7 @@ class DatabaseSeeder extends Seeder
             ['Tripod', 'Tripod kamera', 5],
             ['Ring Light', 'Lampu ring light', 5],
         ] as $item) {
-            Equipment::create([
-                'name' => $item[0],
+            Equipment::updateOrCreate(['name' => $item[0]], [
                 'description' => $item[1],
                 'stock' => $item[2],
             ]);

@@ -1,152 +1,116 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>New Booking - Podcast Studio</title>
-    <link rel="stylesheet" href="{{ asset('css/booking.css') }}">
-</head>
-<body>
-<div class="app-shell">
-    <aside class="sidebar">
-        <div class="brand"><span class="brand-mark">◉</span><span>LabInvent: Podcast</span></div>
-        <nav>
-            <a href="{{ route('dashboard') }}">⌂ <span>Dashboard</span></a>
-            <a class="active" href="{{ route('booking.index') }}">▣ <span>Book a Studio</span></a>
-            <a href="{{ route('booking.history') }}">▤ <span>My Bookings</span></a>
-            <a href="{{ route('booking.index') }}">▧ <span>Studios</span></a>
-            <a href="{{ route('booking.index') }}">⚙ <span>Equipment</span></a>
-            <a href="{{ route('booking.index') }}">ⓘ <span>Help</span></a>
-        </nav>
-        <div class="sidebar-note">Podcast Studio Reservation</div>
-    </aside>
+@extends('app')
 
-    <main class="main-area">
-        <header class="topbar">
-            <div class="search">⌕ <span>Search</span></div>
-            <div class="profile"><span class="avatar">G</span><span>Guest User</span><span>⌄</span></div>
-        </header>
+@section('title', 'Booking Studio | LabInvent Podcast')
 
-        <section class="content">
-            <div class="page-heading">
-                <div>
-                    <p class="eyebrow">PODCAST STUDIO RESERVATION</p>
-                    <h1>New Booking - Podcast Studio</h1>
-                    <p class="subheading">Pilih studio dan lengkapi detail pemesanan kamu.</p>
+@section('content')
+    <section class="booking-page">
+        <div class="page-heading">
+            <div><span class="eyebrow">RESERVASI STUDIO</span><h1>Rencanakan sesi podcast</h1><p class="subheading">Pilih ruang, atur jadwal, dan siapkan perlengkapan yang kamu perlukan.</p></div>
+            <span class="step-pill"><span>01</span> Detail booking</span>
+        </div>
+
+        @if (session('success'))<div class="alert success" role="status">{{ session('success') }} <a href="{{ route('booking.history') }}">Lihat riwayat →</a></div>@endif
+        @if ($errors->any())
+            <div class="alert error" role="alert"><strong>Booking belum dapat disimpan.</strong><ul>@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
+        @endif
+
+        <form action="{{ route('booking.store') }}" method="POST" id="bookingForm">
+            @csrf
+            <section class="panel booking-panel">
+                <div class="section-title"><span class="section-number">01</span><div><h2>Pilih studio</h2><p>Pilih ruangan sesuai suasana dan jumlah peserta.</p></div></div>
+                <div class="studio-grid booking-studio-grid">
+                    @php($studioImages = ['images/studio-aurora.svg', 'images/studio-cozy.svg', 'images/studio-creator.svg'])
+                    @forelse ($studios as $studio)
+                        <label class="studio-card" data-search-item>
+                            <input type="radio" name="studio_id" value="{{ $studio->id }}" data-capacity="{{ $studio->capacity }}" data-price="{{ $studio->price_per_hour }}" {{ (string) old('studio_id') === (string) $studio->id || (!$errors->any() && $loop->first) ? 'checked' : '' }} required>
+                            <div class="studio-image"><img src="{{ asset($studioImages[$loop->index] ?? 'images/studio-creator.svg') }}" alt="Ilustrasi {{ $studio->name }}" loading="lazy"><span class="image-badge">STUDIO {{ str_pad((string) $loop->iteration, 2, '0', STR_PAD_LEFT) }}</span></div>
+                            <div class="studio-info"><strong>{{ $studio->name }}</strong><small>{{ $studio->subtitle }}</small><p>{{ $studio->description }}</p><div class="studio-meta"><span>Hingga {{ $studio->capacity }} orang</span><b>Rp {{ number_format($studio->price_per_hour, 0, ',', '.') }}<small>/jam</small></b></div></div>
+                        </label>
+                    @empty
+                        <div class="empty-state"><strong>Belum ada studio aktif.</strong><span>Tambahkan data studio sebelum membuat booking.</span></div>
+                    @endforelse
                 </div>
-                <span class="step-pill">Step 1 of 2</span>
-            </div>
+                <p class="search-empty" data-search-empty hidden>Tak ada studio atau peralatan yang cocok dengan pencarian.</p>
+            </section>
 
-            @if (session('success'))
-                <div class="alert success">{{ session('success') }}</div>
-            @endif
-
-            @if ($errors->any())
-                <div class="alert error">
-                    <strong>Periksa kembali data kamu:</strong>
-                    <ul>@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>
+            <section class="panel booking-panel">
+                <div class="section-title"><span class="section-number">02</span><div><h2>Tanggal dan waktu</h2><p>Pemesanan dihitung per jam dan jadwal studio tidak boleh bertabrakan.</p></div></div>
+                <div class="form-grid four">
+                    @php($defaultStart = now()->addHour()->startOfHour())
+                    @php($defaultEnd = $defaultStart->copy()->addHours(2))
+                    <label>Tanggal mulai<input type="date" name="start_date" value="{{ old('start_date', $defaultStart->toDateString()) }}" min="{{ date('Y-m-d') }}" required></label>
+                    <label>Jam mulai<input type="time" name="start_time" value="{{ old('start_time', $defaultStart->format('H:i')) }}" required></label>
+                    <label>Tanggal selesai<input type="date" name="end_date" value="{{ old('end_date', $defaultEnd->toDateString()) }}" min="{{ old('start_date', $defaultStart->toDateString()) }}" required></label>
+                    <label>Jam selesai<input type="time" name="end_time" value="{{ old('end_time', $defaultEnd->format('H:i')) }}" required></label>
                 </div>
-            @endif
+            </section>
 
-            <form action="{{ route('booking.store') }}" method="POST" id="bookingForm">
-                @csrf
-
-                <section class="panel">
-                    <div class="section-title"><span class="number">1.</span><div><h2>Select a Studio</h2><p>Pilih satu studio yang sesuai kebutuhan.</p></div></div>
-                    <div class="studio-grid">
-                        @forelse ($studios as $studio)
-                            <label class="studio-card">
-                                <input type="radio" name="studio_id" value="{{ $studio->id }}"
-                                    data-capacity="{{ $studio->capacity }}"
-                                    data-price="{{ $studio->price_per_hour }}"
-                                    {{ (string) old('studio_id') === (string) $studio->id || (!$errors->any() && $loop->first) ? 'checked' : '' }} required>
-                                <div class="studio-image" style="background-color: {{ $studio->color }}">
-                                    @if ($studio->image)
-                                        <img src="{{ $studio->image }}" alt="{{ $studio->name }}" onerror="this.style.display='none'">
-                                    @else
-                                        <span>Podcast Studio</span>
-                                    @endif
-                                </div>
-                                <div class="studio-info">
-                                    <strong>{{ $studio->name }}</strong>
-                                    <small>{{ $studio->subtitle }}</small>
-                                    <p>{{ $studio->features }}</p>
-                                    <div class="studio-meta"><span>♙ Max {{ $studio->capacity }} people</span><b>Rp {{ number_format($studio->price_per_hour, 0, ',', '.') }}/jam</b></div>
-                                </div>
-                            </label>
-                        @empty
-                            <p>Data studio belum tersedia. Jalankan seeder terlebih dahulu.</p>
-                        @endforelse
-                    </div>
-                </section>
-
-                <section class="panel">
-                    <div class="section-title"><span class="number">2.</span><div><h2>Date &amp; Time</h2><p>Tentukan waktu mulai dan selesai.</p></div></div>
-                    <div class="form-grid four">
-                        <label>Start Date<input type="date" name="start_date" value="{{ old('start_date', date('Y-m-d')) }}" min="{{ date('Y-m-d') }}" required></label>
-                        <label>Start Time<input type="time" name="start_time" value="{{ old('start_time', '09:00') }}" required></label>
-                        <label>End Date<input type="date" name="end_date" value="{{ old('end_date', date('Y-m-d')) }}" min="{{ date('Y-m-d') }}" required></label>
-                        <label>End Time<input type="time" name="end_time" value="{{ old('end_time', '11:00') }}" required></label>
-                    </div>
-                </section>
-
-                <section class="panel">
-                    <div class="section-title"><span class="number">3.</span><div><h2>Booking Details</h2><p>Masukkan informasi pemesan dan kebutuhan acara.</p></div></div>
-                    <div class="form-grid two">
-                        <label>Full Name<input type="text" name="customer_name" value="{{ old('customer_name') }}" placeholder="Nama pemesan" maxlength="120" required></label>
-                        <label>Email (optional)<input type="email" name="customer_email" value="{{ old('customer_email') }}" placeholder="nama@email.com"></label>
-                    </div>
-                    <label class="full-label">Purpose / Description<textarea name="purpose" rows="3" placeholder="Contoh: Interview, podcast edukasi, dan lain-lain">{{ old('purpose') }}</textarea></label>
-                    <label class="participant-label">Number of Participants
-                        <input type="number" name="participants" id="participants" min="1" max="100" value="{{ old('participants', 2) }}" required>
-                        <small id="capacityHint">Pilih studio untuk melihat kapasitas maksimum.</small>
-                    </label>
-                </section>
-
-                <section class="panel">
-                    <div class="section-title"><span class="number">4.</span><div><h2>Equipment</h2><p>Pilih peralatan tambahan yang diperlukan.</p></div></div>
-                    <div class="equipment-grid">
-                        @forelse ($equipment as $item)
-                            <label class="equipment-option">
-                                <input type="checkbox" name="equipment[]" value="{{ $item->id }}" {{ in_array($item->id, old('equipment', [])) ? 'checked' : '' }}>
-                                <span>{{ $item->name }}</span>
-                                <small>Stok: {{ $item->stock }}</small>
-                            </label>
-                        @empty
-                            <p>Belum ada data equipment.</p>
-                        @endforelse
-                    </div>
-                </section>
-
-                <div class="form-actions">
-                    <a class="btn btn-light" href="{{ route('dashboard') }}">Back</a>
-                    <button class="btn btn-primary" type="submit">Review &amp; Submit Booking →</button>
+            <section class="panel booking-panel">
+                <div class="section-title"><span class="section-number">03</span><div><h2>Informasi pemesan</h2><p>Isi detail agar pengelola dapat menghubungi kamu.</p></div></div>
+                <div class="form-grid two">
+                    <label>Nama lengkap<input type="text" name="customer_name" value="{{ old('customer_name', auth()->user()?->name) }}" placeholder="Nama pemesan" maxlength="120" autocomplete="name" required></label>
+                    <label>Email <span class="optional">(opsional)</span><input type="email" name="customer_email" value="{{ old('customer_email', auth()->user()?->email) }}" placeholder="nama@email.com" maxlength="150" autocomplete="email"></label>
                 </div>
-            </form>
-            <footer>© {{ date('Y') }} LabInvent: Podcast Studio · Booking preview</footer>
-        </section>
-    </main>
-</div>
+                <label class="full-label">Keperluan sesi <span class="optional">(opsional)</span><textarea name="purpose" rows="3" maxlength="1000" placeholder="Contoh: podcast edukasi, wawancara, atau produksi konten">{{ old('purpose') }}</textarea></label>
+                <label class="participant-label">Jumlah peserta<input type="number" name="participants" id="participants" min="1" max="{{ $studios->max('capacity') ?? 1 }}" value="{{ old('participants', 2) }}" required><small id="capacityHint">Pilih studio untuk melihat kapasitas.</small></label>
+            </section>
 
-<script>
-    const studioRadios = document.querySelectorAll('input[name="studio_id"]');
-    const participants = document.getElementById('participants');
-    const capacityHint = document.getElementById('capacityHint');
+            <section class="panel booking-panel">
+                <div class="section-title"><span class="section-number">04</span><div><h2>Peralatan tambahan</h2><p>Pilih perlengkapan yang ingin disiapkan bersama studio.</p></div></div>
+                <div class="equipment-grid">
+                    @php($equipmentImages = ['headphones' => 'equipment-headphones.svg', 'audio mixer' => 'equipment-mixer.svg', 'condenser microphone' => 'equipment-microphone.svg', 'camera' => 'equipment-camera.svg', 'tripod' => 'equipment-tripod.svg', 'ring light' => 'equipment-ringlight.svg'])
+                    @forelse ($equipment as $item)
+                        @php($equipmentImage = $equipmentImages[strtolower($item->name)] ?? 'equipment-microphone.svg')
+                        <label class="equipment-option {{ $item->stock < 1 ? 'unavailable' : '' }}" data-search-item>
+                            <img src="{{ asset('images/'.$equipmentImage) }}" alt="" loading="lazy">
+                            <span class="equipment-copy"><strong>{{ $item->name }}</strong><small>{{ $item->stock > 0 ? 'Stok tersedia' : 'Sedang habis' }}</small></span>
+                            <input type="checkbox" name="equipment[]" value="{{ $item->id }}" {{ in_array($item->id, old('equipment', [])) ? 'checked' : '' }} {{ $item->stock < 1 ? 'disabled' : '' }} aria-label="Pilih {{ $item->name }}">
+                        </label>
+                    @empty
+                        <div class="empty-state"><strong>Belum ada peralatan aktif.</strong><span>Kamu tetap dapat memesan studio tanpa peralatan tambahan.</span></div>
+                    @endforelse
+                </div>
+            </section>
 
-    function updateCapacity() {
-        const selected = document.querySelector('input[name="studio_id"]:checked');
-        if (!selected) return;
-        const capacity = Number(selected.dataset.capacity);
-        participants.max = capacity;
-        capacityHint.textContent = `Kapasitas studio ini maksimal ${capacity} orang.`;
-        if (Number(participants.value) > capacity) participants.value = capacity;
-    }
-    studioRadios.forEach(radio => radio.addEventListener('change', updateCapacity));
-    updateCapacity();
+            <section class="booking-summary" aria-live="polite"><div><span>ESTIMASI BIAYA STUDIO</span><strong id="priceEstimate">Pilih studio</strong></div><small>Biaya akhir mengikuti lama sesi yang dipesan.</small></section>
+            <div class="form-actions"><a class="btn btn-light" href="{{ route('dashboard') }}">Kembali</a><button class="btn btn-primary" type="submit" @disabled($studios->isEmpty())>Simpan booking <span aria-hidden="true">→</span></button></div>
+        </form>
+        <p class="page-footer">© {{ date('Y') }} LabInvent Podcast · Reservasi studio kampus</p>
+    </section>
 
-    document.querySelector('input[name="start_date"]').addEventListener('change', event => {
-        document.querySelector('input[name="end_date"]').min = event.target.value;
-    });
-</script>
-</body>
-</html>
+    <script>
+        const studioRadios = document.querySelectorAll('input[name="studio_id"]');
+        const participants = document.getElementById('participants');
+        const capacityHint = document.getElementById('capacityHint');
+        const priceEstimate = document.getElementById('priceEstimate');
+        const startDate = document.querySelector('input[name="start_date"]');
+        const endDate = document.querySelector('input[name="end_date"]');
+        const startTime = document.querySelector('input[name="start_time"]');
+        const endTime = document.querySelector('input[name="end_time"]');
+
+        function updateBookingSummary() {
+            const selectedStudio = document.querySelector('input[name="studio_id"]:checked');
+            if (!selectedStudio) return;
+
+            const capacity = Number(selectedStudio.dataset.capacity);
+            participants.max = String(capacity);
+            capacityHint.textContent = `Maksimal ${capacity} peserta untuk studio ini.`;
+            if (Number(participants.value) > capacity) participants.value = String(capacity);
+
+            const beginsAt = new Date(`${startDate.value}T${startTime.value}`);
+            const endsAt = new Date(`${endDate.value}T${endTime.value}`);
+            const hours = Math.max(1, Math.ceil((endsAt - beginsAt) / 3600000));
+            const amount = Number(selectedStudio.dataset.price) * hours;
+            priceEstimate.textContent = `Rp ${new Intl.NumberFormat('id-ID').format(amount)}`;
+        }
+
+        studioRadios.forEach((radio) => radio.addEventListener('change', updateBookingSummary));
+        [participants, startDate, endDate, startTime, endTime].forEach((field) => field?.addEventListener('change', updateBookingSummary));
+        startDate?.addEventListener('change', () => {
+            endDate.min = startDate.value;
+            if (endDate.value < startDate.value) endDate.value = startDate.value;
+            updateBookingSummary();
+        });
+        updateBookingSummary();
+    </script>
+@endsection

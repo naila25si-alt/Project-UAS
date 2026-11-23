@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Booking;
 use App\Models\Equipment;
 use App\Models\Studio;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -37,16 +38,22 @@ class BookingController extends Controller
             'equipment.*' => ['integer', 'distinct', 'exists:equipment,id'],
         ]);
 
-        $start = strtotime($validated['start_date'].' '.$validated['start_time']);
-        $end = strtotime($validated['end_date'].' '.$validated['end_time']);
+        $start = Carbon::parse($validated['start_date'].' '.$validated['start_time']);
+        $end = Carbon::parse($validated['end_date'].' '.$validated['end_time']);
 
-        if ($end <= $start) {
+        if ($start->isPast()) {
+            throw ValidationException::withMessages([
+                'start_time' => 'Waktu mulai harus setelah waktu sekarang.',
+            ]);
+        }
+
+        if ($end->lessThanOrEqualTo($start)) {
             throw ValidationException::withMessages([
                 'end_time' => 'Waktu selesai harus setelah waktu mulai.',
             ]);
         }
 
-        $studio = Studio::findOrFail($validated['studio_id']);
+        $studio = Studio::where('is_active', true)->findOrFail($validated['studio_id']);
 
         if ($validated['participants'] > $studio->capacity) {
             throw ValidationException::withMessages([
@@ -54,29 +61,38 @@ class BookingController extends Controller
             ]);
         }
 
-        $conflict = Booking::where('studio_id', $studio->id)
+        $possibleConflicts = Booking::where('studio_id', $studio->id)
             ->whereIn('status', ['pending', 'confirmed'])
-            ->whereRaw(
-                "TIMESTAMP(start_date, start_time) < ? AND TIMESTAMP(end_date, end_time) > ?",
-                [
-                    date('Y-m-d H:i:s', $end),
-                    date('Y-m-d H:i:s', $start),
-                ]
-            )
-            ->exists();
+            ->whereDate('start_date', '<=', $validated['end_date'])
+            ->whereDate('end_date', '>=', $validated['start_date'])
+            ->get(['start_date', 'start_time', 'end_date', 'end_time']);
 
-        if ($conflict) {
+        $hasScheduleConflict = $possibleConflicts->contains(function (Booking $existingBooking) use ($start, $end): bool {
+            $existingStart = Carbon::parse($existingBooking->start_date->format('Y-m-d').' '.$existingBooking->start_time);
+            $existingEnd = Carbon::parse($existingBooking->end_date->format('Y-m-d').' '.$existingBooking->end_time);
+
+            return $existingStart->lessThan($end) && $existingEnd->greaterThan($start);
+        });
+
+        if ($hasScheduleConflict) {
             throw ValidationException::withMessages([
                 'start_time' => 'Studio sudah dipesan pada rentang waktu tersebut. Silakan pilih jadwal lain.',
             ]);
         }
 
-        $hours = max(1, (int) ceil(($end - $start) / 3600));
-        $booking = DB::transaction(function () use ($validated, $studio, $hours) {
+        $equipmentIds = $validated['equipment'] ?? [];
+        if ($equipmentIds !== [] && Equipment::whereIn('id', $equipmentIds)->where('stock', '<', 1)->exists()) {
+            throw ValidationException::withMessages([
+                'equipment' => 'Salah satu peralatan yang dipilih sedang tidak tersedia.',
+            ]);
+        }
+
+        $hours = max(1, (int) ceil($start->diffInSeconds($end) / 3600));
+        $booking = DB::transaction(function () use ($validated, $studio, $hours, $equipmentIds): Booking {
             $booking = Booking::create([
                 'studio_id' => $studio->id,
                 'customer_name' => $validated['customer_name'],
-                'customer_email' => $validated['customer_email'] ?? null,
+                'customer_email' => auth()->user()->email,
                 'purpose' => $validated['purpose'] ?? null,
                 'participants' => $validated['participants'],
                 'start_date' => $validated['start_date'],
@@ -87,90 +103,89 @@ class BookingController extends Controller
                 'total_price' => $studio->price_per_hour * $hours,
             ]);
 
-            $equipmentIds = $validated['equipment'] ?? [];
             $booking->equipment()->sync(
-                collect($equipmentIds)->mapWithKeys(fn ($id) => [$id => ['quantity' => 1]])->all()
+                collect($equipmentIds)->mapWithKeys(fn ($id): array => [$id => ['quantity' => 1]])->all()
             );
 
             return $booking;
         });
 
         return redirect()
-            ->route('booking.index')
+            ->route('booking.history')
             ->with('success', 'Booking berhasil disimpan! Nomor booking: #'.$booking->id);
     }
 
     public function myBookings(): View
     {
-        $bookings = Booking::with(['studio', 'equipment'])
-            ->latest()
-            ->paginate(10);
+        $bookingsQuery = Booking::with(['studio', 'equipment'])->latest();
+
+        if (auth()->user()->role !== 'admin') {
+            $bookingsQuery->where('customer_email', auth()->user()->email);
+        }
+
+        $bookings = $bookingsQuery->paginate(10);
 
         return view('my-bookings', compact('bookings'));
     }
 
-
-public function dashboard(): View
-{
-    // Menghitung seluruh booking
-    $totalBookings = Booking::count();
-
-    // Menghitung booking yang menunggu persetujuan
-    $pendingBookings = Booking::where('status', 'pending')->count();
-
-    // Menghitung booking yang sudah dikonfirmasi
-    $confirmedBookings = Booking::where('status', 'confirmed')->count();
-
-    // Menghitung studio yang aktif
-    $totalStudios = Studio::where('is_active', true)->count();
-
-    // Menghitung equipment yang aktif
-    $totalEquipment = Equipment::where('is_active', true)->count();
-
-    // Mengambil 6 booking terbaru
-    $recentBookings = Booking::with('studio')
-        ->latest()
-        ->take(6)
-        ->get();
-
-    return view('dashboard', compact(
-        'totalBookings',
-        'pendingBookings',
-        'confirmedBookings',
-        'totalStudios',
-        'totalEquipment',
-        'recentBookings'
-    ));
-}
-public function create()
+    public function updateStatus(Request $request, Booking $booking): RedirectResponse
     {
-        // Data contoh jadwal yang sudah terisi hari ini (nanti bisa diambil dari Database)
-        $bookedSchedules = [
-            ['studio' => 'Studio Musik A', 'time' => '09:00 - 11:00', 'by' => 'UKM Band'],
-            ['studio' => 'Studio Podcast', 'time' => '13:00 - 15:00', 'by' => 'Himpunan TI'],
-        ];
+        abort_unless(auth()->user()->role === 'admin', 403);
 
-        return view('booking.create', compact('bookedSchedules'));
-    }
-
-    // Menerima data dari Form dan meneruskannya ke Halaman Review
-    public function review(Request $request)
-    {
-        // Validasi input sebelum masuk ke halaman review
         $validated = $request->validate([
-            'studio'       => 'required|string',
-            'date'         => 'required|date|after_or_equal:today',
-            'time'         => 'required',
-            'duration'     => 'required|integer|min:1|max:5',
-            'purpose'      => 'required|string|max:255',
-            'participants' => 'required|integer|min:1|max:30',
-            'equipment'    => 'nullable|array',
+            'status' => ['required', 'in:pending,confirmed,cancelled'],
         ]);
 
-        // Kirim data hasil input ke view halaman review kamu
-        return view('booking.review', ['booking' => $validated]);
+        $booking->update(['status' => $validated['status']]);
+
+        return back()->with('success', 'Status booking #'.$booking->id.' berhasil diperbarui.');
     }
 
+    public function dashboard(): View
+    {
+        if (auth()->user()->role === 'admin') {
+            $totalBookings = Booking::count();
+            $pendingBookings = Booking::where('status', 'pending')->count();
+            $confirmedBookings = Booking::where('status', 'confirmed')->count();
+            $totalStudios = Studio::where('is_active', true)->count();
+            $totalEquipment = Equipment::where('is_active', true)->count();
+            $recentBookings = Booking::with('studio')->latest()->take(8)->get();
+
+            return view('dashboard.admin', compact(
+                'totalBookings',
+                'pendingBookings',
+                'confirmedBookings',
+                'totalStudios',
+                'totalEquipment',
+                'recentBookings'
+            ));
+        }
+
+        $studentBookings = Booking::with('studio')
+            ->where('customer_email', auth()->user()->email);
+        $totalBookings = (clone $studentBookings)->count();
+        $pendingBookings = (clone $studentBookings)->where('status', 'pending')->count();
+        $confirmedBookings = (clone $studentBookings)->where('status', 'confirmed')->count();
+        $recentBookings = (clone $studentBookings)->latest()->take(5)->get();
+        $upcomingBooking = (clone $studentBookings)
+            ->whereIn('status', ['pending', 'confirmed'])
+            ->where(function ($query) {
+                $query->whereDate('start_date', '>', today())
+                    ->orWhere(function ($todayQuery) {
+                        $todayQuery->whereDate('start_date', today())
+                            ->whereTime('start_time', '>=', now()->format('H:i:s'));
+                    });
+            })
+            ->orderBy('start_date')
+            ->orderBy('start_time')
+            ->first();
+
+        return view('dashboard.student', compact(
+            'totalBookings',
+            'pendingBookings',
+            'confirmedBookings',
+            'recentBookings',
+            'upcomingBooking'
+        ));
+    }
 }
-
-

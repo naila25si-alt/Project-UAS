@@ -1,71 +1,21 @@
+@extends('app')
 
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Equipment</title>
-    <link rel="stylesheet" href="{{ asset('css/facilities.css') }}">
-</head>
-<body>
+@section('title', 'Peralatan Studio | LabInvent Podcast')
 
-<div class="page-container">
-
-    <div class="page-header">
-        <h1>Studio Equipment</h1>
-        <p>Lihat berbagai peralatan yang tersedia di studio.</p>
-    </div>
-
-    <div class="studio-grid">
-
-        @forelse($equipment as $item)
-
-            <div class="facility-card">
-
-                @php
-                    $image = $item->image ?? null;
-                @endphp
-
-                @if($image)
-                    <img
-                        src="{{ filter_var($image, FILTER_VALIDATE_URL) ? $image : asset('storage/'.$image) }}"
-                        class="facility-image"
-                        alt="Equipment"
-                    >
-                @else
-                    <div class="image-placeholder">
-                        🎧
-                    </div>
-                @endif
-
-                <div class="card-content">
-
-                    <h3>
-                        {{ $item->name ?? $item->nama ?? 'Equipment' }}
-                    </h3>
-
-                    <p>
-                        {{ $item->description ?? $item->deskripsi ?? 'Peralatan studio tersedia untuk kebutuhan produksi.' }}
-                    </p>
-
-                    <div class="card-footer">
-                        <span>
-                            {{ $item->status ?? 'Tersedia' }}
-                        </span>
-                    </div>
-
-                </div>
-            </div>
-
-        @empty
-
-            <p>Belum ada peralatan yang tersedia.</p>
-
-        @endforelse
-
-    </div>
-
-</div>
-
-</body>
-</html>
+@section('content')
+    <section class="facilities-page equipment-page">
+        <div class="facility-hero equipment-hero"><div><span class="eyebrow">PERLENGKAPAN PRODUKSI</span><h1>Suara dan gambar<br>yang lebih baik.</h1><p>Kenali perangkat yang tersedia dan tambahkan ke booking studio kamu.</p><a class="btn btn-primary" href="{{ route('booking.index') }}">Mulai booking <span aria-hidden="true">→</span></a></div><img src="{{ asset('images/equipment-mixer.svg') }}" alt="Ilustrasi mixer audio podcast" loading="lazy"></div>
+        <div class="facility-section-heading"><div><span class="section-overline">INVENTARIS</span><h2>Peralatan aktif <span class="result-count">{{ $equipment->count() }}</span></h2></div><p>Stok ditampilkan sebagai informasi ketersediaan untuk sesi.</p></div>
+        <div class="equipment-catalog">
+            @php($equipmentImages = ['headphones' => 'equipment-headphones.svg', 'audio mixer' => 'equipment-mixer.svg', 'condenser microphone' => 'equipment-microphone.svg', 'camera' => 'equipment-camera.svg', 'tripod' => 'equipment-tripod.svg', 'ring light' => 'equipment-ringlight.svg'])
+            @forelse ($equipment as $item)
+                @php($equipmentImage = $equipmentImages[strtolower($item->name)] ?? 'equipment-microphone.svg')
+                <article class="catalog-card" data-search-item><img src="{{ asset('images/'.$equipmentImage) }}" alt="Ilustrasi {{ $item->name }}" loading="lazy"><div class="catalog-info"><span class="catalog-category">PERLENGKAPAN PODCAST</span><h3>{{ $item->name }}</h3><p>{{ $item->description }}</p><div class="catalog-stock"><span><i class="stock-indicator {{ $item->stock > 0 ? 'in-stock' : 'out-stock' }}"></i>{{ $item->stock > 0 ? 'Tersedia' : 'Stok habis' }}</span><strong>{{ $item->stock }} unit</strong></div><a href="{{ route('booking.index') }}" class="catalog-link">Tambahkan saat booking <span aria-hidden="true">→</span></a></div></article>
+            @empty
+                <div class="empty-state"><strong>Belum ada peralatan aktif.</strong><span>Silakan tanyakan ketersediaan kepada pengelola studio.</span></div>
+            @endforelse
+        </div>
+        <p class="search-empty" data-search-empty hidden>Peralatan tidak ditemukan. Coba kata pencarian lain.</p>
+        <p class="page-footer">© {{ date('Y') }} LabInvent Podcast</p>
+    </section>
+@endsection
