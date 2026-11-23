@@ -1,0 +1,23 @@
+<?php
+
+use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\BookingController;
+use Illuminate\Support\Facades\Route;
+
+// Halaman awal sementara langsung ke booking agar dapat diuji tanpa login.
+Route::get('/', fn () => redirect()->route('booking.index'));
+
+// Route login yang sudah ada tetap dipertahankan.
+Route::get('/login', [LoginController::class, 'show'])->name('login');
+Route::post('/login', [LoginController::class, 'store'])->name('login.store');
+
+// Booking sementara dapat dibuka tanpa login.
+Route::get('/booking', [BookingController::class, 'index'])->name('booking.index');
+Route::post('/booking', [BookingController::class, 'store'])->name('booking.store');
+Route::get('/my-bookings', [BookingController::class, 'myBookings'])->name('booking.history');
+
+// Alias dashboard sementara menuju halaman booking.
+Route::get('/dashboard', fn () => redirect()->route('booking.index'))->name('dashboard');
+
+// Tambahkan kembali middleware auth untuk route yang memang harus privat
+// sebelum aplikasi dipublikasikan.
